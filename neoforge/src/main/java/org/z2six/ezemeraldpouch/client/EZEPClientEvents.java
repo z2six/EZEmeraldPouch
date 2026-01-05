@@ -37,21 +37,38 @@ public final class EZEPClientEvents {
 
     @net.neoforged.bus.api.SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        // KeyMapping checks must happen in a client tick event (NeoForge guidance).
+        // This is why "O" currently does nothing: you register the mapping but never consume it.
         try {
+            // Defensive: ensure the key mapping exists (registration should have done this already).
+            EZEPKeyMappings.createIfMissing();
+            if (EZEPKeyMappings.OPEN_PLACEMENT_EDITOR == null) {
+                ModConstants.LOG.debug("[EZEP] ClientTick: OPEN_PLACEMENT_EDITOR is null (unexpected).");
+                return;
+            }
+
             Minecraft mc = Minecraft.getInstance();
             if (mc == null) return;
+            if (mc.player == null || mc.level == null) return;
 
-            // Consume clicks (per NeoForge docs).
-            while (EZEPKeyMappings.OPEN_PLACEMENT_EDITOR != null && EZEPKeyMappings.OPEN_PLACEMENT_EDITOR.consumeClick()) {
+            // Consume all queued clicks (avoids missed presses; also avoids infinite loops).
+            while (EZEPKeyMappings.OPEN_PLACEMENT_EDITOR.consumeClick()) {
+                // If already open, ignore.
                 if (mc.screen instanceof EZEPPlacementScreen) {
-                    // already open
-                    ModConstants.LOG.debug("[EZEP] Placement editor key pressed, but editor is already open.");
+                    ModConstants.LOG.debug("[EZEP] Placement editor already open; ignoring key press.");
                     continue;
                 }
 
-                // Open the placement editor
-                ModConstants.LOG.info("[EZEP] Opening placement editor screen.");
+                // If user is typing in chat / sign / anvil / etc, don't steal the keybind.
+                // (This is optional but prevents annoying behavior.)
+                if (mc.screen != null && !(mc.screen instanceof InventoryScreen)) {
+                    ModConstants.LOG.debug("[EZEP] Placement editor key pressed, but another screen is open ({}). Ignoring.",
+                            mc.screen.getClass().getName());
+                    continue;
+                }
+
                 mc.setScreen(new EZEPPlacementScreen());
+                ModConstants.LOG.info("[EZEP] Opened placement editor via keybind (default: O).");
             }
         } catch (Throwable t) {
             ModConstants.LOG.warn("[EZEP] onClientTick failed (non-fatal): {}", t.toString());
@@ -66,9 +83,6 @@ public final class EZEPClientEvents {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.player == null) return;
         if (mc.options.hideGui) return;
-
-        // Hide regular HUD while using our placement editor flow.
-        if (mc.screen instanceof EZEPPlacementScreen) return;
 
         GuiGraphics gg = event.getGuiGraphics();
         if (gg == null) return;
@@ -100,39 +114,23 @@ public final class EZEPClientEvents {
     @net.neoforged.bus.api.SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         Screen screen = event.getScreen();
-        if (!(screen instanceof InventoryScreen inv)) {
+        if (!(screen instanceof InventoryScreen inv)) return;
+        if (!EZEPClientConfig.WITHDRAW_BTN_ENABLED.get()) {
+            ModConstants.LOG.debug("[EZEP] Withdraw button disabled by client config; not adding to inventory screen.");
             return;
         }
 
-        // Place the withdraw button based on config offsets relative to GUI top-left.
-        int guiLeft;
-        int guiTop;
-        int guiW;
-        int guiH;
-
-        try {
-            guiLeft = inv.getGuiLeft();
-            guiTop = inv.getGuiTop();
-            guiW = inv.getXSize();
-            guiH = inv.getYSize();
-        } catch (Throwable t) {
-            // If something changes with mappings or another mod's screen subclass, don't crash.
-            ModConstants.LOG.warn("[EZEP] InventoryScreen init: failed reading gui bounds (non-fatal): {}", t.toString());
-            ModConstants.LOG.debug("[EZEP] InventoryScreen init bounds failure details", t);
-            return;
-        }
+        int left = inv.getGuiLeft();
+        int top = inv.getGuiTop();
 
         int offX = EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.get();
         int offY = EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.get();
 
-        // Best-effort clamp to stay within some reasonable range near the GUI.
-        // We do NOT hard force it inside; if player wants it outside, allow it.
-        int x = guiLeft + offX;
-        int y = guiTop + offY;
+        int x = left + offX;
+        int y = top + offY;
 
         event.addListener(new WithdrawButtonWidget(x, y, BTN_SIZE, BTN_SIZE));
-        ModConstants.LOG.debug("[EZEP] Added withdraw button to InventoryScreen at {},{} (offset {},{}) guiLeft={},guiTop={},w={},h={}",
-                x, y, offX, offY, guiLeft, guiTop, guiW, guiH);
+        ModConstants.LOG.debug("[EZEP] Added withdraw button to InventoryScreen at {},{} (offset {},{})", x, y, offX, offY);
     }
 
     @net.neoforged.bus.api.SubscribeEvent
@@ -215,7 +213,6 @@ public final class EZEPClientEvents {
     }
 
     private static final class WithdrawButtonWidget extends net.minecraft.client.gui.components.AbstractWidget {
-
         public WithdrawButtonWidget(int x, int y, int w, int h) {
             super(x, y, w, h, net.minecraft.network.chat.Component.empty());
         }

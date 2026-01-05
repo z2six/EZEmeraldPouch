@@ -22,6 +22,10 @@ public final class EZEPCommonEvents {
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer sp)) return;
 
+        // Failsafe: if emeralds exist but pouch item is missing (Curios toggled, datapack not applied, etc),
+        // refund to player so we don't "soft-lock" value in the attachment.
+        EmeraldPouchUtil.failsafeRefundIfNoPouch(sp, "login");
+
         PacketDistributor.sendToPlayer(sp, new SyncCountPayload(EmeraldPouchUtil.getCount(sp)));
         ModConstants.LOG.debug("[EZEP] Login sync sent to {}", sp.getGameProfile().getName());
     }
@@ -29,6 +33,8 @@ public final class EZEPCommonEvents {
     @net.neoforged.bus.api.SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer sp)) return;
+
+        EmeraldPouchUtil.failsafeRefundIfNoPouch(sp, "respawn");
 
         PacketDistributor.sendToPlayer(sp, new SyncCountPayload(EmeraldPouchUtil.getCount(sp)));
         ModConstants.LOG.debug("[EZEP] Respawn sync sent to {}", sp.getGameProfile().getName());
@@ -44,6 +50,7 @@ public final class EZEPCommonEvents {
         ItemStack stack = itemEntity.getItem();
         if (!EmeraldPouchUtil.isEmerald(stack)) return;
 
+        // Only auto-deposit if the pouch exists somewhere.
         if (!EmeraldPouchUtil.hasPouchSomewhere(sp)) return;
 
         int count = stack.getCount();

@@ -24,21 +24,23 @@ import java.util.Locale;
  * - Save writes positions to client config.
  * - Cancel restores positions and closes.
  *
- * Design choice:
- * - HUD position is stored as absolute screen pixels (same as existing config).
- * - Withdraw button position is stored as offsets relative to inventory GUI top-left.
- *   (so it moves correctly with GUI scale / screen size)
+ * Also includes:
+ * - Reset button
+ * - HUD hide/show toggle
+ * - Withdraw button hide/show toggle
+ *
+ * Note on blur:
+ * - NeoForge/MC background dim/blur can make thin outlines hard to see.
+ * - We draw a strong dark overlay and thicker/bright outlines for readability.
  */
 public final class EZEPPlacementScreen extends Screen {
 
     private static final ResourceLocation WITHDRAW_ICON =
             ResourceLocation.fromNamespaceAndPath(ModConstants.MODID, "textures/gui/withdraw_button.png");
 
-    // Fake inventory outline size: vanilla-ish base inventory background is 176x166.
     private static final int INV_W = 176;
     private static final int INV_H = 166;
 
-    // Preview sizes
     private static final int ICON_SIZE = 16;
     private static final int HUD_TEXT_PAD_X = 4;
     private static final int HUD_TEXT_PAD_Y = 4;
@@ -50,18 +52,22 @@ public final class EZEPPlacementScreen extends Screen {
     }
 
     // Original values (for cancel)
+    private boolean origHudEnabled;
     private int origHudX;
     private int origHudY;
     private double origHudScale;
+
+    private boolean origBtnEnabled;
     private int origBtnOffX;
     private int origBtnOffY;
 
     // Working preview state
+    private boolean hudEnabled;
     private int hudX;
     private int hudY;
     private double hudScale;
 
-    // Button offsets relative to inventory outline top-left
+    private boolean btnEnabled;
     private int btnOffX;
     private int btnOffY;
 
@@ -73,6 +79,10 @@ public final class EZEPPlacementScreen extends Screen {
     private int invLeft;
     private int invTop;
 
+    // Widgets we need to update labels on
+    private Button hudToggleBtn;
+    private Button btnToggleBtn;
+
     public EZEPPlacementScreen() {
         super(Component.literal("EZ Emerald Pouch Placement Editor"));
     }
@@ -82,18 +92,22 @@ public final class EZEPPlacementScreen extends Screen {
         super.init();
 
         // Snapshot original config (for cancel)
+        origHudEnabled = EZEPClientConfig.HUD_ENABLED.get();
         origHudX = EZEPClientConfig.HUD_X.get();
         origHudY = EZEPClientConfig.HUD_Y.get();
         origHudScale = EZEPClientConfig.HUD_SCALE.get();
 
+        origBtnEnabled = EZEPClientConfig.WITHDRAW_BTN_ENABLED.get();
         origBtnOffX = EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.get();
         origBtnOffY = EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.get();
 
         // Working copies
+        hudEnabled = origHudEnabled;
         hudX = origHudX;
         hudY = origHudY;
         hudScale = origHudScale;
 
+        btnEnabled = origBtnEnabled;
         btnOffX = origBtnOffX;
         btnOffY = origBtnOffY;
 
@@ -101,22 +115,39 @@ public final class EZEPPlacementScreen extends Screen {
         invLeft = Math.max(0, (this.width - INV_W) / 2);
         invTop = Math.max(0, (this.height - INV_H) / 2);
 
-        int btnW = 90;
+        int btnW = 88;
         int btnH = 20;
         int pad = 8;
 
         int bottomY = Math.min(this.height - btnH - pad, invTop + INV_H + 18);
 
-        // Save / Cancel buttons
+        // Buttons row: Save / Cancel / Reset
         this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> onSave())
-                .bounds(this.width / 2 - btnW - 6, bottomY, btnW, btnH)
+                .bounds(this.width / 2 - (btnW * 2) - 12, bottomY, btnW, btnH)
                 .build());
 
         this.addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onCancel())
+                .bounds(this.width / 2 - (btnW) - 6, bottomY, btnW, btnH)
+                .build());
+
+        this.addRenderableWidget(Button.builder(Component.literal("Reset"), b -> onReset())
                 .bounds(this.width / 2 + 6, bottomY, btnW, btnH)
                 .build());
 
+        // Toggles row (above save row)
+        int toggleY = bottomY - (btnH + 6);
+
+        hudToggleBtn = this.addRenderableWidget(Button.builder(hudToggleLabel(), b -> toggleHud())
+                .bounds(this.width / 2 - (btnW) - 6, toggleY, btnW + 6, btnH)
+                .build());
+
+        btnToggleBtn = this.addRenderableWidget(Button.builder(btnToggleLabel(), b -> toggleWithdrawBtn())
+                .bounds(this.width / 2 + 6, toggleY, btnW + 18, btnH)
+                .build());
+
         ModConstants.LOG.info("[EZEP] Placement editor opened. invLeft={},invTop={}, size={}x{}", invLeft, invTop, INV_W, INV_H);
+        ModConstants.LOG.info("[EZEP] Placement editor state: HUD(enabled={}, x={}, y={}, scale={}) BTN(enabled={}, offX={}, offY={})",
+                hudEnabled, hudX, hudY, hudScale, btnEnabled, btnOffX, btnOffY);
     }
 
     @Override
@@ -124,27 +155,21 @@ public final class EZEPPlacementScreen extends Screen {
         return false;
     }
 
-    @Override
-    public void onClose() {
-        super.onClose();
-        ModConstants.LOG.info("[EZEP] Placement editor closed.");
-    }
-
     private void onSave() {
         try {
-            // Write working values to config
+            EZEPClientConfig.HUD_ENABLED.set(hudEnabled);
             EZEPClientConfig.HUD_X.set(hudX);
             EZEPClientConfig.HUD_Y.set(hudY);
             EZEPClientConfig.HUD_SCALE.set(hudScale);
 
+            EZEPClientConfig.WITHDRAW_BTN_ENABLED.set(btnEnabled);
             EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.set(btnOffX);
             EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.set(btnOffY);
 
-            // Attempt to force-save to disk
             EZEPClientConfigSaver.saveClientConfigBestEffort();
 
-            ModConstants.LOG.info("[EZEP] Placement saved. HUD=({},{} @ scale {}) BTN_OFF=({},{}).",
-                    hudX, hudY, hudScale, btnOffX, btnOffY);
+            ModConstants.LOG.info("[EZEP] Placement saved. HUD(enabled={}, x={}, y={}, scale={}) BTN(enabled={}, offX={}, offY={})",
+                    hudEnabled, hudX, hudY, hudScale, btnEnabled, btnOffX, btnOffY);
 
         } catch (Throwable t) {
             ModConstants.LOG.warn("[EZEP] Placement save failed (non-fatal): {}", t.toString());
@@ -157,11 +182,12 @@ public final class EZEPPlacementScreen extends Screen {
 
     private void onCancel() {
         try {
-            // Restore original values
+            EZEPClientConfig.HUD_ENABLED.set(origHudEnabled);
             EZEPClientConfig.HUD_X.set(origHudX);
             EZEPClientConfig.HUD_Y.set(origHudY);
             EZEPClientConfig.HUD_SCALE.set(origHudScale);
 
+            EZEPClientConfig.WITHDRAW_BTN_ENABLED.set(origBtnEnabled);
             EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.set(origBtnOffX);
             EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.set(origBtnOffY);
 
@@ -177,6 +203,55 @@ public final class EZEPPlacementScreen extends Screen {
         if (mc != null) mc.setScreen(null);
     }
 
+    private void onReset() {
+        try {
+            hudEnabled = true;
+            hudX = EZEPClientConfig.DEFAULT_HUD_X;
+            hudY = EZEPClientConfig.DEFAULT_HUD_Y;
+            hudScale = EZEPClientConfig.DEFAULT_HUD_SCALE;
+
+            btnEnabled = true;
+            btnOffX = EZEPClientConfig.DEFAULT_WITHDRAW_BTN_OFFSET_X;
+            btnOffY = EZEPClientConfig.DEFAULT_WITHDRAW_BTN_OFFSET_Y;
+
+            updateToggleLabels();
+
+            ModConstants.LOG.info("[EZEP] Placement editor reset to defaults (working state only).");
+        } catch (Throwable t) {
+            ModConstants.LOG.warn("[EZEP] Reset failed (non-fatal): {}", t.toString());
+            ModConstants.LOG.debug("[EZEP] Reset failure details", t);
+        }
+    }
+
+    private void toggleHud() {
+        hudEnabled = !hudEnabled;
+        updateToggleLabels();
+        ModConstants.LOG.info("[EZEP] Placement editor toggled HUD -> {}", hudEnabled);
+    }
+
+    private void toggleWithdrawBtn() {
+        btnEnabled = !btnEnabled;
+        updateToggleLabels();
+        ModConstants.LOG.info("[EZEP] Placement editor toggled Withdraw Button -> {}", btnEnabled);
+    }
+
+    private void updateToggleLabels() {
+        try {
+            if (hudToggleBtn != null) hudToggleBtn.setMessage(hudToggleLabel());
+            if (btnToggleBtn != null) btnToggleBtn.setMessage(btnToggleLabel());
+        } catch (Throwable t) {
+            ModConstants.LOG.debug("[EZEP] updateToggleLabels failed (non-fatal).", t);
+        }
+    }
+
+    private Component hudToggleLabel() {
+        return Component.literal("HUD: " + (hudEnabled ? "Shown" : "Hidden"));
+    }
+
+    private Component btnToggleLabel() {
+        return Component.literal("Withdraw Button: " + (btnEnabled ? "Shown" : "Hidden"));
+    }
+
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         // ESC behaves like cancel
@@ -190,22 +265,17 @@ public final class EZEPPlacementScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         try {
-            if (button != 0) {
-                return super.mouseClicked(mouseX, mouseY, button);
-            }
+            if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
 
-            // Determine click target: HUD preview or withdraw preview
-            if (isMouseOverHud(mouseX, mouseY)) {
+            if (hudEnabled && isMouseOverHud(mouseX, mouseY)) {
                 dragging = DragTarget.HUD;
-                int bx = (int) mouseX - hudX;
-                int by = (int) mouseY - hudY;
-                dragGrabDX = bx;
-                dragGrabDY = by;
+                dragGrabDX = (int) mouseX - hudX;
+                dragGrabDY = (int) mouseY - hudY;
                 ModConstants.LOG.debug("[EZEP] Drag start HUD (grab {},{})", dragGrabDX, dragGrabDY);
                 return true;
             }
 
-            if (isMouseOverWithdrawButton(mouseX, mouseY)) {
+            if (btnEnabled && isMouseOverWithdrawButton(mouseX, mouseY)) {
                 dragging = DragTarget.WITHDRAW_BUTTON;
                 int btnXAbs = invLeft + btnOffX;
                 int btnYAbs = invTop + btnOffY;
@@ -246,7 +316,6 @@ public final class EZEPPlacementScreen extends Screen {
                 int nx = (int) mouseX - dragGrabDX;
                 int ny = (int) mouseY - dragGrabDY;
 
-                // Soft clamp inside screen bounds (allow small overflow, but avoid losing it completely).
                 nx = clamp(nx, -50, this.width - 10);
                 ny = clamp(ny, -50, this.height - 10);
 
@@ -256,15 +325,12 @@ public final class EZEPPlacementScreen extends Screen {
             }
 
             if (dragging == DragTarget.WITHDRAW_BUTTON) {
-                // Convert drag to offsets relative to inventory outline
                 int nxAbs = (int) mouseX - dragGrabDX;
                 int nyAbs = (int) mouseY - dragGrabDY;
 
-                // Convert to offsets
                 int nxOff = nxAbs - invLeft;
                 int nyOff = nyAbs - invTop;
 
-                // Soft clamp so it stays near inventory (still allow some range).
                 nxOff = clamp(nxOff, -64, INV_W + 64);
                 nyOff = clamp(nyOff, -64, INV_H + 64);
 
@@ -289,7 +355,6 @@ public final class EZEPPlacementScreen extends Screen {
             String example = exampleHudText();
             int textW = font.width(example);
 
-            // HUD preview bounds are scaled by hudScale
             float s = (float) hudScale;
 
             int w = (int) ((ICON_SIZE + HUD_TEXT_PAD_X + textW) * s);
@@ -308,56 +373,74 @@ public final class EZEPPlacementScreen extends Screen {
     }
 
     private String exampleHudText() {
-        // Explicitly example only (per your requirement).
         return "123.4k";
     }
 
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        // NOTE: 1.21.1 signature requires mouseX/mouseY/partialTick
+        // Background (blur/dim)
         this.renderBackground(gg, mouseX, mouseY, partialTick);
 
-        // Title + instructions
+        // High-contrast overlay so the editor is readable even with blur/dim.
+        // (This is the real fix for "can't see anything".)
+        gg.fill(0, 0, this.width, this.height, 0xB0000000);
+
         Font font = Minecraft.getInstance().font;
         if (font != null) {
             gg.drawString(font, "EZ Emerald Pouch Placement Editor", 10, 10, 0xFFFFFF, true);
-            gg.drawString(font, "Drag the HUD preview and the withdraw button preview.", 10, 24, 0xCFCFCF, false);
-            gg.drawString(font, "Save applies to config. Cancel restores old values. ESC = Cancel.", 10, 36, 0xCFCFCF, false);
+            gg.drawString(font, "Drag HUD preview + withdraw button preview.", 10, 24, 0xFFE0E0E0, false);
+            gg.drawString(font, "Save applies to config. Cancel restores old values. ESC = Cancel.", 10, 36, 0xFFE0E0E0, false);
         }
 
         // Fake inventory outline
-        drawOutlineRect(gg, invLeft, invTop, INV_W, INV_H, 0xFFAAAAAA);
+        drawOutlineRect(gg, invLeft, invTop, INV_W, INV_H, 0xFFFFFFFF);
+        drawOutlineRect(gg, invLeft - 1, invTop - 1, INV_W + 2, INV_H + 2, 0xFF00FF00); // extra bright border
+
         drawCheckerInteriorHint(gg, invLeft + 1, invTop + 1, INV_W - 2, INV_H - 2);
 
         if (font != null) {
-            gg.drawString(font, "Inventory (example outline)", invLeft + 6, invTop + 6, 0xFFDDDDDD, false);
+            gg.drawString(font, "Inventory (example outline)", invLeft + 6, invTop + 6, 0xFFFFFFFF, true);
         }
 
-        // Draw withdraw button preview at (invLeft + btnOffX, invTop + btnOffY)
+        // Withdraw button preview
         int btnX = invLeft + btnOffX;
         int btnY = invTop + btnOffY;
 
-        RenderSystem.enableBlend();
-        gg.blit(WITHDRAW_ICON, btnX, btnY, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+        if (btnEnabled) {
+            RenderSystem.enableBlend();
+            gg.blit(WITHDRAW_ICON, btnX, btnY, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
 
-        // Hover/selection highlight
-        if (isMouseOverWithdrawButton(mouseX, mouseY) || dragging == DragTarget.WITHDRAW_BUTTON) {
-            gg.fill(btnX, btnY, btnX + ICON_SIZE, btnY + ICON_SIZE, 0x40FFFFFF);
-            drawOutlineRect(gg, btnX, btnY, ICON_SIZE, ICON_SIZE, 0xFFFFFFFF);
+            if (isMouseOverWithdrawButton(mouseX, mouseY) || dragging == DragTarget.WITHDRAW_BUTTON) {
+                gg.fill(btnX, btnY, btnX + ICON_SIZE, btnY + ICON_SIZE, 0x60FFFFFF);
+                drawOutlineRect(gg, btnX, btnY, ICON_SIZE, ICON_SIZE, 0xFFFFFFFF);
+            }
+        } else {
+            // Disabled: show a placeholder outline where it currently would be
+            drawOutlineRect(gg, btnX, btnY, ICON_SIZE, ICON_SIZE, 0xFF888888);
+            if (font != null) {
+                gg.drawString(font, "Hidden", btnX + 2, btnY + 4, 0xFFAAAAAA, false);
+            }
         }
 
-        // Draw HUD preview (absolute screen position, scaled)
-        renderHudPreview(gg, mouseX, mouseY);
+        // HUD preview
+        if (hudEnabled) {
+            renderHudPreview(gg, mouseX, mouseY);
+        } else {
+            // Disabled: show where it would be (non-scaled placeholder)
+            drawOutlineRect(gg, hudX, hudY, 64, 20, 0xFF888888);
+            if (font != null) {
+                gg.drawString(font, "HUD Hidden", hudX + 4, hudY + 6, 0xFFAAAAAA, false);
+            }
+        }
 
-        // Also show numeric debug values
+        // Debug readout
         if (font != null) {
             int infoY = Math.min(this.height - 60, invTop + INV_H + 4);
-            String hudInfo = String.format(Locale.ROOT, "HUD: x=%d y=%d scale=%.2f", hudX, hudY, hudScale);
-            String btnInfo = String.format(Locale.ROOT, "Withdraw Btn (offset): x=%d y=%d  (abs=%d,%d)",
-                    btnOffX, btnOffY, btnX, btnY);
+            String hudInfo = String.format(Locale.ROOT, "HUD: enabled=%s x=%d y=%d scale=%.2f", hudEnabled, hudX, hudY, hudScale);
+            String btnInfo = String.format(Locale.ROOT, "BTN: enabled=%s offX=%d offY=%d (abs=%d,%d)", btnEnabled, btnOffX, btnOffY, btnX, btnY);
 
-            gg.drawString(font, hudInfo, 10, infoY, 0xFFBFBFBF, false);
-            gg.drawString(font, btnInfo, 10, infoY + 12, 0xFFBFBFBF, false);
+            gg.drawString(font, hudInfo, 10, infoY, 0xFFFFFFFF, true);
+            gg.drawString(font, btnInfo, 10, infoY + 12, 0xFFFFFFFF, true);
         }
 
         super.render(gg, mouseX, mouseY, partialTick);
@@ -380,15 +463,17 @@ public final class EZEPPlacementScreen extends Screen {
             gg.pose().translate(hudX, hudY, 0);
             gg.pose().scale(s, s, 1.0f);
 
+            // Solid backing for readability
+            gg.fill(-2, -2, baseW + 2, baseH + 2, 0xA0000000);
+
             RenderSystem.enableBlend();
             gg.blit(WITHDRAW_ICON, 0, 0, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
 
             gg.drawString(font, example, ICON_SIZE + HUD_TEXT_PAD_X, HUD_TEXT_PAD_Y, 0xFFFFFF, true);
 
-            // highlight when hovered/dragging
             boolean hovered = isMouseOverHud(mouseX, mouseY);
             if (hovered || dragging == DragTarget.HUD) {
-                gg.fill(0, 0, baseW, baseH, 0x30FFFFFF);
+                gg.fill(0, 0, baseW, baseH, 0x40FFFFFF);
                 drawOutlineRect(gg, 0, 0, baseW, baseH, 0xFFFFFFFF);
             }
 
@@ -399,20 +484,15 @@ public final class EZEPPlacementScreen extends Screen {
     }
 
     private static void drawOutlineRect(GuiGraphics gg, int x, int y, int w, int h, int argb) {
-        // top
-        gg.fill(x, y, x + w, y + 1, argb);
-        // bottom
-        gg.fill(x, y + h - 1, x + w, y + h, argb);
-        // left
-        gg.fill(x, y, x + 1, y + h, argb);
-        // right
-        gg.fill(x + w - 1, y, x + w, y + h, argb);
+        gg.fill(x, y, x + w, y + 1, argb);                 // top
+        gg.fill(x, y + h - 1, x + w, y + h, argb);         // bottom
+        gg.fill(x, y, x + 1, y + h, argb);                 // left
+        gg.fill(x + w - 1, y, x + w, y + h, argb);         // right
     }
 
     private static void drawCheckerInteriorHint(GuiGraphics gg, int x, int y, int w, int h) {
-        // Very light checker so player sees it’s just an outline area.
-        int c1 = 0x10101010;
-        int c2 = 0x08080808;
+        int c1 = 0x10202020;
+        int c2 = 0x10101010;
 
         int step = 8;
         for (int yy = 0; yy < h; yy += step) {
