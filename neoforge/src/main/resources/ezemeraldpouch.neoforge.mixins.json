@@ -2,7 +2,6 @@
   "required": true,
   "minVersion": "0.8",
   "package": "org.z2six.ezemeraldpouch.mixin",
-  "refmap": "${mod_id}.refmap.json",
   "compatibilityLevel": "JAVA_21",
   "mixins": [],
   "client": [
@@ -13,4 +12,3 @@
     "defaultRequire": 1
   }
 }
-  
