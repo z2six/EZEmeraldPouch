@@ -6,6 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -32,6 +33,11 @@ import java.util.Locale;
  * Note on blur:
  * - NeoForge/MC background dim/blur can make thin outlines hard to see.
  * - We draw a strong dark overlay and thicker/bright outlines for readability.
+ *
+ * IMPORTANT RENDERING NOTE:
+ * - Do NOT call super.render() here, because Screen#render will render the background again (blur/dim),
+ *   which ends up overlaying/blur-filtering our custom drawings. Buttons appear fine because they render after.
+ * - Instead, we render background ONCE, then our custom preview, then manually render widgets/renderables.
  */
 public final class EZEPPlacementScreen extends Screen {
 
@@ -215,7 +221,6 @@ public final class EZEPPlacementScreen extends Screen {
             btnOffY = EZEPClientConfig.DEFAULT_WITHDRAW_BTN_OFFSET_Y;
 
             updateToggleLabels();
-
             ModConstants.LOG.info("[EZEP] Placement editor reset to defaults (working state only).");
         } catch (Throwable t) {
             ModConstants.LOG.warn("[EZEP] Reset failed (non-fatal): {}", t.toString());
@@ -315,7 +320,6 @@ public final class EZEPPlacementScreen extends Screen {
             if (dragging == DragTarget.HUD) {
                 int nx = (int) mouseX - dragGrabDX;
                 int ny = (int) mouseY - dragGrabDY;
-
                 nx = clamp(nx, -50, this.width - 10);
                 ny = clamp(ny, -50, this.height - 10);
 
@@ -378,11 +382,15 @@ public final class EZEPPlacementScreen extends Screen {
 
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        // Background (blur/dim)
-        this.renderBackground(gg, mouseX, mouseY, partialTick);
+        // Render the blur/dim background ONCE.
+        // If we call super.render() later, Screen#render will render the background again and overlay our drawings.
+        try {
+            this.renderBackground(gg, mouseX, mouseY, partialTick);
+        } catch (Throwable t) {
+            ModConstants.LOG.debug("[EZEP] renderBackground failed (non-fatal).", t);
+        }
 
         // High-contrast overlay so the editor is readable even with blur/dim.
-        // (This is the real fix for "can't see anything".)
         gg.fill(0, 0, this.width, this.height, 0xB0000000);
 
         Font font = Minecraft.getInstance().font;
@@ -394,7 +402,7 @@ public final class EZEPPlacementScreen extends Screen {
 
         // Fake inventory outline
         drawOutlineRect(gg, invLeft, invTop, INV_W, INV_H, 0xFFFFFFFF);
-        drawOutlineRect(gg, invLeft - 1, invTop - 1, INV_W + 2, INV_H + 2, 0xFF00FF00); // extra bright border
+        drawOutlineRect(gg, invLeft - 1, invTop - 1, INV_W + 2, INV_H + 2, 0xFF00FF00);
 
         drawCheckerInteriorHint(gg, invLeft + 1, invTop + 1, INV_W - 2, INV_H - 2);
 
@@ -415,7 +423,6 @@ public final class EZEPPlacementScreen extends Screen {
                 drawOutlineRect(gg, btnX, btnY, ICON_SIZE, ICON_SIZE, 0xFFFFFFFF);
             }
         } else {
-            // Disabled: show a placeholder outline where it currently would be
             drawOutlineRect(gg, btnX, btnY, ICON_SIZE, ICON_SIZE, 0xFF888888);
             if (font != null) {
                 gg.drawString(font, "Hidden", btnX + 2, btnY + 4, 0xFFAAAAAA, false);
@@ -426,14 +433,13 @@ public final class EZEPPlacementScreen extends Screen {
         if (hudEnabled) {
             renderHudPreview(gg, mouseX, mouseY);
         } else {
-            // Disabled: show where it would be (non-scaled placeholder)
             drawOutlineRect(gg, hudX, hudY, 64, 20, 0xFF888888);
             if (font != null) {
                 gg.drawString(font, "HUD Hidden", hudX + 4, hudY + 6, 0xFFAAAAAA, false);
             }
         }
 
-        // Debug readout
+        /* Debug readout
         if (font != null) {
             int infoY = Math.min(this.height - 60, invTop + INV_H + 4);
             String hudInfo = String.format(Locale.ROOT, "HUD: enabled=%s x=%d y=%d scale=%.2f", hudEnabled, hudX, hudY, hudScale);
@@ -442,8 +448,21 @@ public final class EZEPPlacementScreen extends Screen {
             gg.drawString(font, hudInfo, 10, infoY, 0xFFFFFFFF, true);
             gg.drawString(font, btnInfo, 10, infoY + 12, 0xFFFFFFFF, true);
         }
+         */
 
-        super.render(gg, mouseX, mouseY, partialTick);
+        // Render widgets/renderables last so they're on top (and not blurred).
+        try {
+            for (Renderable r : this.renderables) {
+                r.render(gg, mouseX, mouseY, partialTick);
+            }
+        } catch (Throwable t) {
+            ModConstants.LOG.warn("[EZEP] Manual renderables render failed (non-fatal): {}", t.toString());
+            ModConstants.LOG.debug("[EZEP] Manual renderables failure details", t);
+        }
+
+        // NOTE:
+        // Screen#renderTooltip(GuiGraphics,int,int) does not exist in this MC/NeoForge line.
+        // If you later want tooltips, implement them explicitly via GuiGraphics#renderTooltip(...) with concrete text.
     }
 
     private void renderHudPreview(GuiGraphics gg, int mouseX, int mouseY) {
@@ -465,7 +484,6 @@ public final class EZEPPlacementScreen extends Screen {
 
             // Solid backing for readability
             gg.fill(-2, -2, baseW + 2, baseH + 2, 0xA0000000);
-
             RenderSystem.enableBlend();
             gg.blit(WITHDRAW_ICON, 0, 0, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
 
