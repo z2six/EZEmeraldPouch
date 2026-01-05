@@ -1,21 +1,45 @@
+// MainFile: neoforge/src/main/java/org/z2six/ezemeraldpouch/EZEmeraldPouch.java
 package org.z2six.ezemeraldpouch;
 
-
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.common.NeoForge;
+import org.z2six.ezemeraldpouch.client.EZEPClientEvents;
+import org.z2six.ezemeraldpouch.config.EZEPClientConfig;
+import org.z2six.ezemeraldpouch.data.ModAttachments;
+import org.z2six.ezemeraldpouch.event.EZEPCommonEvents;
+import org.z2six.ezemeraldpouch.network.EZEPPayloads;
+import org.z2six.ezemeraldpouch.registry.ModItems;
 
-@Mod(Constants.MOD_ID)
-public class EZEmeraldPouch {
+@Mod(ModConstants.MODID)
+public final class EZEmeraldPouch {
 
-    public EZEmeraldPouch(IEventBus eventBus) {
+    public EZEmeraldPouch(IEventBus modBus, ModContainer container) {
+        ModConstants.LOG.info("[EZEP] Constructing mod. modid={}", ModConstants.MODID);
 
-        // This method is invoked by the NeoForge mod loader when it is ready
-        // to load your mod. You can access NeoForge and Common code in this
-        // project.
+        // Registries
+        ModItems.register(modBus);
+        ModAttachments.register(modBus);
 
-        // Use NeoForge to bootstrap the Common mod.
-        Constants.LOG.info("Hello NeoForge world!");
-        CommonClass.init();
+        // Networking
+        modBus.addListener(EZEPPayloads::registerPayloads);
 
+        // Config
+        if (FMLEnvironment.dist.isClient()) {
+            container.registerConfig(ModConfig.Type.CLIENT, EZEPClientConfig.SPEC);
+            ModConstants.LOG.info("[EZEP] Registered CLIENT config");
+        }
+
+        // Game events
+        NeoForge.EVENT_BUS.register(EZEPCommonEvents.class);
+
+        if (FMLEnvironment.dist.isClient()) {
+            NeoForge.EVENT_BUS.register(EZEPClientEvents.class);
+        }
+
+        ModConstants.LOG.info("[EZEP] Mod constructed successfully.");
     }
 }
