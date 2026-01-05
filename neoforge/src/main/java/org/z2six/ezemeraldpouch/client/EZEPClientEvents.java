@@ -7,15 +7,18 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.fml.ModList;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.z2six.ezemeraldpouch.ModConstants;
+import org.z2six.ezemeraldpouch.client.screen.EZEPPlacementScreen;
 import org.z2six.ezemeraldpouch.config.EZEPClientConfig;
 import org.z2six.ezemeraldpouch.network.DepositSlotRequestPayload;
 import org.z2six.ezemeraldpouch.network.QuickEquipCuriosPouchPayload;
@@ -28,9 +31,32 @@ public final class EZEPClientEvents {
             ResourceLocation.fromNamespaceAndPath(ModConstants.MODID, "textures/gui/withdraw_button.png");
 
     private static final int BTN_SIZE = 16;
-    private static final int BTN_PAD = 4;
 
     private EZEPClientEvents() {
+    }
+
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null) return;
+
+            // Consume clicks (per NeoForge docs).
+            while (EZEPKeyMappings.OPEN_PLACEMENT_EDITOR != null && EZEPKeyMappings.OPEN_PLACEMENT_EDITOR.consumeClick()) {
+                if (mc.screen instanceof EZEPPlacementScreen) {
+                    // already open
+                    ModConstants.LOG.debug("[EZEP] Placement editor key pressed, but editor is already open.");
+                    continue;
+                }
+
+                // Open the placement editor
+                ModConstants.LOG.info("[EZEP] Opening placement editor screen.");
+                mc.setScreen(new EZEPPlacementScreen());
+            }
+        } catch (Throwable t) {
+            ModConstants.LOG.warn("[EZEP] onClientTick failed (non-fatal): {}", t.toString());
+            ModConstants.LOG.debug("[EZEP] onClientTick failure details", t);
+        }
     }
 
     @net.neoforged.bus.api.SubscribeEvent
@@ -40,6 +66,9 @@ public final class EZEPClientEvents {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.player == null) return;
         if (mc.options.hideGui) return;
+
+        // Hide regular HUD while using our placement editor flow.
+        if (mc.screen instanceof EZEPPlacementScreen) return;
 
         GuiGraphics gg = event.getGuiGraphics();
         if (gg == null) return;
@@ -71,17 +100,39 @@ public final class EZEPClientEvents {
     @net.neoforged.bus.api.SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         Screen screen = event.getScreen();
-        if (!(screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen inv)) {
+        if (!(screen instanceof InventoryScreen inv)) {
             return;
         }
 
-        int left = inv.getGuiLeft();
-        int top = inv.getGuiTop();
-        int x = left + inv.getXSize() - BTN_SIZE - BTN_PAD;
-        int y = top + BTN_PAD;
+        // Place the withdraw button based on config offsets relative to GUI top-left.
+        int guiLeft;
+        int guiTop;
+        int guiW;
+        int guiH;
+
+        try {
+            guiLeft = inv.getGuiLeft();
+            guiTop = inv.getGuiTop();
+            guiW = inv.getXSize();
+            guiH = inv.getYSize();
+        } catch (Throwable t) {
+            // If something changes with mappings or another mod's screen subclass, don't crash.
+            ModConstants.LOG.warn("[EZEP] InventoryScreen init: failed reading gui bounds (non-fatal): {}", t.toString());
+            ModConstants.LOG.debug("[EZEP] InventoryScreen init bounds failure details", t);
+            return;
+        }
+
+        int offX = EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.get();
+        int offY = EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.get();
+
+        // Best-effort clamp to stay within some reasonable range near the GUI.
+        // We do NOT hard force it inside; if player wants it outside, allow it.
+        int x = guiLeft + offX;
+        int y = guiTop + offY;
 
         event.addListener(new WithdrawButtonWidget(x, y, BTN_SIZE, BTN_SIZE));
-        ModConstants.LOG.debug("[EZEP] Added withdraw button to InventoryScreen at {},{}", x, y);
+        ModConstants.LOG.debug("[EZEP] Added withdraw button to InventoryScreen at {},{} (offset {},{}) guiLeft={},guiTop={},w={},h={}",
+                x, y, offX, offY, guiLeft, guiTop, guiW, guiH);
     }
 
     @net.neoforged.bus.api.SubscribeEvent
@@ -95,7 +146,7 @@ public final class EZEPClientEvents {
         // Require Shift
         if (!Screen.hasShiftDown()) return;
 
-        Slot hovered = null;
+        Slot hovered;
         try {
             hovered = cs.getSlotUnderMouse();
         } catch (Throwable t) {

@@ -1,5 +1,7 @@
 {
   "item.ezemeraldpouch.emerald_pouch": "Emerald Pouch",
   "curios.identifier.pouch": "Pouch",
-  "ezemeraldpouch.hud.label": "Emeralds"
+  "ezemeraldpouch.hud.label": "Emeralds",
+  "key.categories.ezemeraldpouch": "EZ Emerald Pouch",
+  "key.ezemeraldpouch.open_placement_editor": "Open Placement Editor"
 }

@@ -10,6 +10,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.z2six.ezemeraldpouch.client.EZEPClientEvents;
 import org.z2six.ezemeraldpouch.config.EZEPClientConfig;
 import org.z2six.ezemeraldpouch.data.ModAttachments;
+import org.z2six.ezemeraldpouch.event.EZEPClientModBusEvents;
 import org.z2six.ezemeraldpouch.event.EZEPCommonEvents;
 import org.z2six.ezemeraldpouch.event.EZEPModBusEvents;
 import org.z2six.ezemeraldpouch.network.EZEPPayloads;
@@ -35,6 +36,10 @@ public final class EZEmeraldPouch {
         if (FMLEnvironment.dist.isClient()) {
             container.registerConfig(ModConfig.Type.CLIENT, EZEPClientConfig.SPEC);
             ModConstants.LOG.info("[EZEP] Registered CLIENT config");
+
+            // Client-only mod-bus events (key mapping registration)
+            modBus.addListener(EZEPClientModBusEvents::onRegisterKeyMappings);
+            ModConstants.LOG.info("[EZEP] Registered client mod-bus listeners");
         }
 
         // Game events
