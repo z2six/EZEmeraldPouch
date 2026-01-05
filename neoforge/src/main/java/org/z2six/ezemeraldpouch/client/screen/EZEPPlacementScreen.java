@@ -121,34 +121,50 @@ public final class EZEPPlacementScreen extends Screen {
         invLeft = Math.max(0, (this.width - INV_W) / 2);
         invTop = Math.max(0, (this.height - INV_H) / 2);
 
-        int btnW = 88;
-        int btnH = 20;
-        int pad = 8;
+        // --- Button layout: 2 rows, centered, equal sizes ---
+        // Row A (top): HUD Toggle, Withdraw Toggle, Reset
+        // Row B (bottom): Save, Cancel
+        //
+        // All buttons same width/height and consistent gaps.
+        final int btnW = 130;
+        final int btnH = 20;
+        final int gap = 8;
 
-        int bottomY = Math.min(this.height - btnH - pad, invTop + INV_H + 18);
+        // Determine Y positions near/below inventory, but keep on-screen
+        int rowBWidth = (btnW * 2) + gap;              // Save + Cancel
+        int rowAWidth = (btnW * 3) + (gap * 2);        // HUD + Withdraw + Reset
 
-        // Buttons row: Save / Cancel / Reset
+        int rowBLeft = Math.max(0, (this.width - rowBWidth) / 2);
+        int rowALeft = Math.max(0, (this.width - rowAWidth) / 2);
+
+        int padBottom = 10;
+        int proposedRowB = invTop + INV_H + 20;
+        int maxRowB = this.height - btnH - padBottom;
+        int rowBY = Math.min(proposedRowB, maxRowB);
+
+        int rowAY = rowBY - btnH - 6; // small vertical gap between rows
+        if (rowAY < 48) rowAY = 48;   // keep away from top text a bit if very small screens
+
+        // Row B buttons (Save, Cancel)
         this.addRenderableWidget(Button.builder(Component.literal("Save"), b -> onSave())
-                .bounds(this.width / 2 - (btnW * 2) - 12, bottomY, btnW, btnH)
+                .bounds(rowBLeft, rowBY, btnW, btnH)
                 .build());
 
         this.addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onCancel())
-                .bounds(this.width / 2 - (btnW) - 6, bottomY, btnW, btnH)
+                .bounds(rowBLeft + btnW + gap, rowBY, btnW, btnH)
                 .build());
 
-        this.addRenderableWidget(Button.builder(Component.literal("Reset"), b -> onReset())
-                .bounds(this.width / 2 + 6, bottomY, btnW, btnH)
-                .build());
-
-        // Toggles row (above save row)
-        int toggleY = bottomY - (btnH + 6);
-
+        // Row A buttons (HUD toggle, Withdraw toggle, Reset) - all same size
         hudToggleBtn = this.addRenderableWidget(Button.builder(hudToggleLabel(), b -> toggleHud())
-                .bounds(this.width / 2 - (btnW) - 6, toggleY, btnW + 6, btnH)
+                .bounds(rowALeft, rowAY, btnW, btnH)
                 .build());
 
         btnToggleBtn = this.addRenderableWidget(Button.builder(btnToggleLabel(), b -> toggleWithdrawBtn())
-                .bounds(this.width / 2 + 6, toggleY, btnW + 18, btnH)
+                .bounds(rowALeft + btnW + gap, rowAY, btnW, btnH)
+                .build());
+
+        this.addRenderableWidget(Button.builder(Component.literal("Reset"), b -> onReset())
+                .bounds(rowALeft + (btnW + gap) * 2, rowAY, btnW, btnH)
                 .build());
 
         ModConstants.LOG.info("[EZEP] Placement editor opened. invLeft={},invTop={}, size={}x{}", invLeft, invTop, INV_W, INV_H);
@@ -254,7 +270,7 @@ public final class EZEPPlacementScreen extends Screen {
     }
 
     private Component btnToggleLabel() {
-        return Component.literal("Withdraw Button: " + (btnEnabled ? "Shown" : "Hidden"));
+        return Component.literal("Withdraw: " + (btnEnabled ? "Shown" : "Hidden"));
     }
 
     @Override
@@ -383,7 +399,6 @@ public final class EZEPPlacementScreen extends Screen {
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         // Render the blur/dim background ONCE.
-        // If we call super.render() later, Screen#render will render the background again and overlay our drawings.
         try {
             this.renderBackground(gg, mouseX, mouseY, partialTick);
         } catch (Throwable t) {
@@ -439,17 +454,6 @@ public final class EZEPPlacementScreen extends Screen {
             }
         }
 
-        /* Debug readout
-        if (font != null) {
-            int infoY = Math.min(this.height - 60, invTop + INV_H + 4);
-            String hudInfo = String.format(Locale.ROOT, "HUD: enabled=%s x=%d y=%d scale=%.2f", hudEnabled, hudX, hudY, hudScale);
-            String btnInfo = String.format(Locale.ROOT, "BTN: enabled=%s offX=%d offY=%d (abs=%d,%d)", btnEnabled, btnOffX, btnOffY, btnX, btnY);
-
-            gg.drawString(font, hudInfo, 10, infoY, 0xFFFFFFFF, true);
-            gg.drawString(font, btnInfo, 10, infoY + 12, 0xFFFFFFFF, true);
-        }
-         */
-
         // Render widgets/renderables last so they're on top (and not blurred).
         try {
             for (Renderable r : this.renderables) {
@@ -459,10 +463,6 @@ public final class EZEPPlacementScreen extends Screen {
             ModConstants.LOG.warn("[EZEP] Manual renderables render failed (non-fatal): {}", t.toString());
             ModConstants.LOG.debug("[EZEP] Manual renderables failure details", t);
         }
-
-        // NOTE:
-        // Screen#renderTooltip(GuiGraphics,int,int) does not exist in this MC/NeoForge line.
-        // If you later want tooltips, implement them explicitly via GuiGraphics#renderTooltip(...) with concrete text.
     }
 
     private void renderHudPreview(GuiGraphics gg, int mouseX, int mouseY) {
