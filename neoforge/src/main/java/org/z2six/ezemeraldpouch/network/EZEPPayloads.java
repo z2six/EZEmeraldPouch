@@ -26,6 +26,12 @@ public final class EZEPPayloads {
                 DepositSlotRequestPayload::handle
         );
 
+        registrar.playToServer(
+                QuickEquipCuriosPouchPayload.TYPE,
+                QuickEquipCuriosPouchPayload.STREAM_CODEC,
+                QuickEquipCuriosPouchPayload::handle
+        );
+
         registrar.playToClient(
                 SyncCountPayload.TYPE,
                 SyncCountPayload.STREAM_CODEC,

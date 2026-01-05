@@ -1,5 +1,15 @@
 {
+  "replace": false,
+  "order": 500,
   "size": 1,
-  "order": 250,
-  "icon": "ezemeraldpouch:slot/pouch"
+  "icon": "ezemeraldpouch:slot/pouch",
+  "validators": [
+    "curios:tag"
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "curios"
+    }
+  ]
 }

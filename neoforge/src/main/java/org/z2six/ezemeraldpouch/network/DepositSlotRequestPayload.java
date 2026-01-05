@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.z2six.ezemeraldpouch.ModConstants;
@@ -72,22 +73,36 @@ public record DepositSlotRequestPayload(int containerId, int slotIndex) implemen
             }
 
             ItemStack stack = slot.getItem();
-            if (!EmeraldPouchUtil.isEmerald(stack)) {
-                ModConstants.LOG.debug("[EZEP] Deposit ignored: slot {} not emerald ({}). player={}",
-                        idx, stack.isEmpty() ? "empty" : stack.getItem().toString(), sp.getGameProfile().getName());
+            if (stack.isEmpty()) return;
+
+            boolean isEmerald = stack.is(Items.EMERALD);
+            boolean isEmeraldBlock = stack.is(Items.EMERALD_BLOCK);
+            if (!isEmerald && !isEmeraldBlock) {
+                ModConstants.LOG.debug("[EZEP] Deposit ignored: slot {} not emerald or emerald block ({}). player={}",
+                        idx, stack.getItem().toString(), sp.getGameProfile().getName());
                 return;
             }
 
             int count = stack.getCount();
             if (count <= 0) return;
 
+            long depositAmount;
+            if (isEmeraldBlock) {
+                // 1 emerald block -> 9 emeralds
+                depositAmount = (long) count * 9L;
+            } else {
+                depositAmount = (long) count;
+            }
+
+            // Remove from container slot
             slot.set(ItemStack.EMPTY);
             menu.broadcastChanges();
 
-            EmeraldPouchUtil.depositEmeralds(sp, count);
+            EmeraldPouchUtil.depositEmeralds(sp, depositAmount);
             PacketDistributor.sendToPlayer(sp, new SyncCountPayload(EmeraldPouchUtil.getCount(sp)));
 
-            ModConstants.LOG.debug("[EZEP] Deposited {} emeralds from slot {} for player={}", count, idx, sp.getGameProfile().getName());
+            ModConstants.LOG.debug("[EZEP] Deposited {} emerald(s) from slot {} (item={}, count={}) for player={}",
+                    depositAmount, idx, stack.getItem().toString(), count, sp.getGameProfile().getName());
         });
     }
 }

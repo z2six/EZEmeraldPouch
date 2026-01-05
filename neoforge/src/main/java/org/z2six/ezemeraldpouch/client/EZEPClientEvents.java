@@ -11,20 +11,22 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.z2six.ezemeraldpouch.ModConstants;
 import org.z2six.ezemeraldpouch.config.EZEPClientConfig;
 import org.z2six.ezemeraldpouch.network.DepositSlotRequestPayload;
+import org.z2six.ezemeraldpouch.network.QuickEquipCuriosPouchPayload;
 import org.z2six.ezemeraldpouch.network.WithdrawRequestPayload;
+import org.z2six.ezemeraldpouch.registry.ModItems;
 
 public final class EZEPClientEvents {
 
     private static final ResourceLocation WITHDRAW_ICON =
             ResourceLocation.fromNamespaceAndPath(ModConstants.MODID, "textures/gui/withdraw_button.png");
 
-    // Button layout
     private static final int BTN_SIZE = 16;
     private static final int BTN_PAD = 4;
 
@@ -47,7 +49,7 @@ public final class EZEPClientEvents {
         double scale = EZEPClientConfig.HUD_SCALE.get();
 
         long emeralds = EZEPClientState.getEmeralds();
-        String text = "Emeralds: " + abbreviate(emeralds);
+        String text = abbreviate(emeralds);
 
         Font font = mc.font;
         if (font == null) return;
@@ -56,7 +58,12 @@ public final class EZEPClientEvents {
         gg.pose().translate(x, y, 0);
         gg.pose().scale((float) scale, (float) scale, 1.0f);
 
-        gg.drawString(font, text, 0, 0, 0xFFFFFF, true);
+        RenderSystem.enableBlend();
+        gg.blit(WITHDRAW_ICON, 0, 0, 0, 0, 16, 16, 16, 16);
+
+        int textX = 16 + 4;
+        int textY = 4;
+        gg.drawString(font, text, textX, textY, 0xFFFFFF, true);
 
         gg.pose().popPose();
     }
@@ -82,15 +89,45 @@ public final class EZEPClientEvents {
         Screen screen = event.getScreen();
         if (!(screen instanceof AbstractContainerScreen<?> cs)) return;
 
-        // Shift + Right click (RMB == 1) on emerald stack deposits it
-        if (!Screen.hasShiftDown()) return;
+        // Right mouse button
         if (event.getButton() != 1) return;
 
-        Slot hovered = cs.getSlotUnderMouse();
+        // Require Shift
+        if (!Screen.hasShiftDown()) return;
+
+        Slot hovered = null;
+        try {
+            hovered = cs.getSlotUnderMouse();
+        } catch (Throwable t) {
+            hovered = null;
+        }
         if (hovered == null) return;
 
         ItemStack stack = hovered.getItem();
-        if (stack.isEmpty() || !stack.is(Items.EMERALD)) return;
+        if (stack == null || stack.isEmpty()) return;
+
+        // A) Shift+RMB on our pouch item -> quick equip into Curios pouch slot (if Curios present)
+        if (stack.is(ModItems.EMERALD_POUCH.get()) && ModList.get().isLoaded("curios")) {
+            int containerId;
+            int slotIndex;
+            try {
+                containerId = cs.getMenu().containerId;
+                slotIndex = hovered.index;
+            } catch (Throwable t) {
+                ModConstants.LOG.debug("[EZEP] Failed reading containerId/slotIndex for pouch quick-equip (non-fatal).", t);
+                return;
+            }
+
+            event.setCanceled(true);
+            PacketDistributor.sendToServer(new QuickEquipCuriosPouchPayload(containerId, slotIndex));
+            ModConstants.LOG.info("[EZEP] Sent quick-equip pouch request: containerId={} slotIndex={}", containerId, slotIndex);
+            return;
+        }
+
+        // B) Shift+RMB on emerald / emerald block -> deposit to pouch
+        boolean isEmerald = stack.is(Items.EMERALD);
+        boolean isEmeraldBlock = stack.is(Items.EMERALD_BLOCK);
+        if (!isEmerald && !isEmeraldBlock) return;
 
         event.setCanceled(true);
 
@@ -98,7 +135,8 @@ public final class EZEPClientEvents {
         int slotIndex = hovered.index;
 
         PacketDistributor.sendToServer(new DepositSlotRequestPayload(containerId, slotIndex));
-        ModConstants.LOG.debug("[EZEP] Client requested deposit for containerId={} slot={}", containerId, slotIndex);
+        ModConstants.LOG.debug("[EZEP] Client requested deposit for containerId={} slot={} item={}",
+                containerId, slotIndex, stack.getItem().toString());
     }
 
     static void requestWithdrawStacks(int stacks) {
@@ -125,9 +163,6 @@ public final class EZEPClientEvents {
         return String.format(java.util.Locale.ROOT, "%.1f%s", v, suffix[i]);
     }
 
-    /**
-     * Minimal image button widget.
-     */
     private static final class WithdrawButtonWidget extends net.minecraft.client.gui.components.AbstractWidget {
 
         public WithdrawButtonWidget(int x, int y, int w, int h) {

@@ -1,4 +1,15 @@
 {
-  "entities": ["player"],
-  "slots": ["pouch"]
+  "replace": false,
+  "entities": [
+    "player"
+  ],
+  "slots": [
+    "pouch"
+  ],
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "curios"
+    }
+  ]
 }

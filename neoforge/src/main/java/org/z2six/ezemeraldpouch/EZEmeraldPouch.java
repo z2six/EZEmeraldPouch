@@ -11,6 +11,7 @@ import org.z2six.ezemeraldpouch.client.EZEPClientEvents;
 import org.z2six.ezemeraldpouch.config.EZEPClientConfig;
 import org.z2six.ezemeraldpouch.data.ModAttachments;
 import org.z2six.ezemeraldpouch.event.EZEPCommonEvents;
+import org.z2six.ezemeraldpouch.event.EZEPModBusEvents;
 import org.z2six.ezemeraldpouch.network.EZEPPayloads;
 import org.z2six.ezemeraldpouch.registry.ModItems;
 
@@ -26,6 +27,9 @@ public final class EZEmeraldPouch {
 
         // Networking
         modBus.addListener(EZEPPayloads::registerPayloads);
+
+        // Creative tabs (mod bus)
+        modBus.addListener(EZEPModBusEvents::onBuildCreativeTabContents);
 
         // Config
         if (FMLEnvironment.dist.isClient()) {
