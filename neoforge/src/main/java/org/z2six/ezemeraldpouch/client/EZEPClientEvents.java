@@ -24,6 +24,7 @@ import org.z2six.ezemeraldpouch.network.DepositSlotRequestPayload;
 import org.z2six.ezemeraldpouch.network.QuickEquipCuriosPouchPayload;
 import org.z2six.ezemeraldpouch.network.WithdrawRequestPayload;
 import org.z2six.ezemeraldpouch.registry.ModItems;
+import org.z2six.ezemeraldpouch.util.EmeraldPouchUtil;
 
 public final class EZEPClientEvents {
 
@@ -83,6 +84,7 @@ public final class EZEPClientEvents {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.player == null) return;
         if (mc.options.hideGui) return;
+        if (!EmeraldPouchUtil.hasPouchSomewhere(mc.player)) return;
 
         GuiGraphics gg = event.getGuiGraphics();
         if (gg == null) return;
