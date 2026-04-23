@@ -6,9 +6,11 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.z2six.ezemeraldpouch.ModConstants;
 import org.z2six.ezemeraldpouch.data.EmeraldPouchData;
 import org.z2six.ezemeraldpouch.data.ModAttachments;
+import org.z2six.ezemeraldpouch.network.SyncCountPayload;
 import org.z2six.ezemeraldpouch.registry.ModItems;
 
 public final class EmeraldPouchUtil {
@@ -66,6 +68,33 @@ public final class EmeraldPouchUtil {
     public static long getCount(Player player) {
         if (player == null) return 0L;
         return getData(player).getEmeralds();
+    }
+
+    public static boolean tryWithdrawExact(Player player, long amount) {
+        if (player == null) return false;
+        if (amount <= 0L) return true;
+        EmeraldPouchData data = getData(player);
+        if (data.getEmeralds() < amount) return false;
+        return data.withdrawUpTo(amount) == amount;
+    }
+
+    public static void syncCountToClient(ServerPlayer player) {
+        if (player == null) return;
+        PacketDistributor.sendToPlayer(player, new SyncCountPayload(getCount(player)));
+    }
+
+    public static long giveEmeralds(ServerPlayer player, long emeralds) {
+        if (player == null) return 0L;
+        if (emeralds <= 0L) return 0L;
+
+        long given;
+        if (hasPouchSomewhere(player)) {
+            given = depositEmeralds(player, emeralds);
+        } else {
+            given = refundEmeraldsToPlayer(player, emeralds);
+        }
+        syncCountToClient(player);
+        return given;
     }
 
     /**

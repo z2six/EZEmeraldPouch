@@ -1,14 +1,13 @@
 // MainFile: neoforge/src/main/java/org/z2six/ezemeraldpouch/client/EZEPClientEvents.java
 package org.z2six.ezemeraldpouch.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -28,10 +27,8 @@ import org.z2six.ezemeraldpouch.util.EmeraldPouchUtil;
 
 public final class EZEPClientEvents {
 
-    private static final ResourceLocation WITHDRAW_ICON =
-            ResourceLocation.fromNamespaceAndPath(ModConstants.MODID, "textures/gui/withdraw_button.png");
-
     private static final int BTN_SIZE = 16;
+    private static final ItemStack EMERALD_ICON = new ItemStack(Items.EMERALD);
 
     private EZEPClientEvents() {
     }
@@ -103,8 +100,7 @@ public final class EZEPClientEvents {
         gg.pose().translate(x, y, 0);
         gg.pose().scale((float) scale, (float) scale, 1.0f);
 
-        RenderSystem.enableBlend();
-        gg.blit(WITHDRAW_ICON, 0, 0, 0, 0, 16, 16, 16, 16);
+        gg.renderItem(EMERALD_ICON, 0, 0);
 
         int textX = 16 + 4;
         int textY = 4;
@@ -116,14 +112,16 @@ public final class EZEPClientEvents {
     @net.neoforged.bus.api.SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         Screen screen = event.getScreen();
-        if (!(screen instanceof InventoryScreen inv)) return;
+        if (!(screen instanceof InventoryScreen) && !(screen instanceof MerchantScreen)) return;
         if (!EZEPClientConfig.WITHDRAW_BTN_ENABLED.get()) {
             ModConstants.LOG.debug("[EZEP] Withdraw button disabled by client config; not adding to inventory screen.");
             return;
         }
 
-        int left = inv.getGuiLeft();
-        int top = inv.getGuiTop();
+        if (!(screen instanceof AbstractContainerScreen<?> cs)) return;
+
+        int left = cs.getGuiLeft();
+        int top = cs.getGuiTop();
 
         int offX = EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.get();
         int offY = EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.get();
@@ -132,7 +130,8 @@ public final class EZEPClientEvents {
         int y = top + offY;
 
         event.addListener(new WithdrawButtonWidget(x, y, BTN_SIZE, BTN_SIZE));
-        ModConstants.LOG.debug("[EZEP] Added withdraw button to InventoryScreen at {},{} (offset {},{})", x, y, offX, offY);
+        ModConstants.LOG.debug("[EZEP] Added withdraw button to {} at {},{} (offset {},{})",
+                screen.getClass().getSimpleName(), x, y, offX, offY);
     }
 
     @net.neoforged.bus.api.SubscribeEvent
@@ -221,8 +220,7 @@ public final class EZEPClientEvents {
 
         @Override
         protected void renderWidget(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-            RenderSystem.enableBlend();
-            gg.blit(WITHDRAW_ICON, getX(), getY(), 0, 0, BTN_SIZE, BTN_SIZE, BTN_SIZE, BTN_SIZE);
+            gg.renderItem(EMERALD_ICON, getX(), getY());
 
             if (isHoveredOrFocused()) {
                 gg.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0x40FFFFFF);

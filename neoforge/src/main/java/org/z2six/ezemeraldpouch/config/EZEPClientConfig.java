@@ -12,7 +12,7 @@ public final class EZEPClientConfig {
     public static final ModConfigSpec.IntValue HUD_Y;
     public static final ModConfigSpec.DoubleValue HUD_SCALE;
 
-    // Withdraw button (inventory screen)
+    // Withdraw button (inventory + merchant screens)
     public static final ModConfigSpec.BooleanValue WITHDRAW_BTN_ENABLED;
     public static final ModConfigSpec.IntValue WITHDRAW_BTN_OFFSET_X;
     public static final ModConfigSpec.IntValue WITHDRAW_BTN_OFFSET_Y;
@@ -45,7 +45,7 @@ public final class EZEPClientConfig {
         b.pop();
 
         b.push("withdraw_button");
-        WITHDRAW_BTN_ENABLED = b.comment("Show the withdraw button on the player inventory screen")
+        WITHDRAW_BTN_ENABLED = b.comment("Show the withdraw button on inventory and merchant screens")
                 .define("enabled", true);
 
         WITHDRAW_BTN_OFFSET_X = b.comment("Withdraw button X offset relative to the inventory GUI left")

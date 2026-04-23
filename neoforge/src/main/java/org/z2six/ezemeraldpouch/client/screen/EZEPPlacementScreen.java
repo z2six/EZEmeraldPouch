@@ -1,7 +1,6 @@
 // MainFile: neoforge/src/main/java/org/z2six/ezemeraldpouch/client/screen/EZEPPlacementScreen.java
 package org.z2six.ezemeraldpouch.client.screen;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -9,7 +8,8 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.z2six.ezemeraldpouch.ModConstants;
 import org.z2six.ezemeraldpouch.config.EZEPClientConfig;
 import org.z2six.ezemeraldpouch.util.EZEPClientConfigSaver;
@@ -41,15 +41,13 @@ import java.util.Locale;
  */
 public final class EZEPPlacementScreen extends Screen {
 
-    private static final ResourceLocation WITHDRAW_ICON =
-            ResourceLocation.fromNamespaceAndPath(ModConstants.MODID, "textures/gui/withdraw_button.png");
-
     private static final int INV_W = 176;
     private static final int INV_H = 166;
 
     private static final int ICON_SIZE = 16;
     private static final int HUD_TEXT_PAD_X = 4;
     private static final int HUD_TEXT_PAD_Y = 4;
+    private static final ItemStack EMERALD_ICON = new ItemStack(Items.EMERALD);
 
     private enum DragTarget {
         NONE,
@@ -430,8 +428,7 @@ public final class EZEPPlacementScreen extends Screen {
         int btnY = invTop + btnOffY;
 
         if (btnEnabled) {
-            RenderSystem.enableBlend();
-            gg.blit(WITHDRAW_ICON, btnX, btnY, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+            gg.renderItem(EMERALD_ICON, btnX, btnY);
 
             if (isMouseOverWithdrawButton(mouseX, mouseY) || dragging == DragTarget.WITHDRAW_BUTTON) {
                 gg.fill(btnX, btnY, btnX + ICON_SIZE, btnY + ICON_SIZE, 0x60FFFFFF);
@@ -484,8 +481,7 @@ public final class EZEPPlacementScreen extends Screen {
 
             // Solid backing for readability
             gg.fill(-2, -2, baseW + 2, baseH + 2, 0xA0000000);
-            RenderSystem.enableBlend();
-            gg.blit(WITHDRAW_ICON, 0, 0, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+            gg.renderItem(EMERALD_ICON, 0, 0);
 
             gg.drawString(font, example, ICON_SIZE + HUD_TEXT_PAD_X, HUD_TEXT_PAD_Y, 0xFFFFFF, true);
 
