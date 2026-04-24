@@ -12,20 +12,23 @@ public final class EZEPClientConfig {
     public static final ModConfigSpec.IntValue HUD_Y;
     public static final ModConfigSpec.DoubleValue HUD_SCALE;
 
-    // Withdraw button (inventory + merchant screens)
+    // Withdraw button
     public static final ModConfigSpec.BooleanValue WITHDRAW_BTN_ENABLED;
-    public static final ModConfigSpec.IntValue WITHDRAW_BTN_OFFSET_X;
-    public static final ModConfigSpec.IntValue WITHDRAW_BTN_OFFSET_Y;
+    public static final ModConfigSpec.IntValue WITHDRAW_BTN_INVENTORY_OFFSET_X;
+    public static final ModConfigSpec.IntValue WITHDRAW_BTN_INVENTORY_OFFSET_Y;
+    public static final ModConfigSpec.IntValue WITHDRAW_BTN_MERCHANT_OFFSET_X;
+    public static final ModConfigSpec.IntValue WITHDRAW_BTN_MERCHANT_OFFSET_Y;
 
     // Defaults (used by reset in placement editor)
     public static final int DEFAULT_HUD_X = 6;
     public static final int DEFAULT_HUD_Y = 6;
     public static final double DEFAULT_HUD_SCALE = 1.0;
 
-    // Default button offsets relative to inventory GUI top-left.
-    // Keep close to prior placement: top-right corner (approx).
-    public static final int DEFAULT_WITHDRAW_BTN_OFFSET_X = 176 - 16 - 4; // invWidth - icon - pad
-    public static final int DEFAULT_WITHDRAW_BTN_OFFSET_Y = 4;
+    // Default button offsets relative to the screen GUI top-left.
+    public static final int DEFAULT_WITHDRAW_BTN_INVENTORY_OFFSET_X = 176 - 16 - 4;
+    public static final int DEFAULT_WITHDRAW_BTN_INVENTORY_OFFSET_Y = 4;
+    public static final int DEFAULT_WITHDRAW_BTN_MERCHANT_OFFSET_X = 276 - 16 - 4;
+    public static final int DEFAULT_WITHDRAW_BTN_MERCHANT_OFFSET_Y = 4;
 
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
@@ -48,11 +51,17 @@ public final class EZEPClientConfig {
         WITHDRAW_BTN_ENABLED = b.comment("Show the withdraw button on inventory and merchant screens")
                 .define("enabled", true);
 
-        WITHDRAW_BTN_OFFSET_X = b.comment("Withdraw button X offset relative to the inventory GUI left")
-                .defineInRange("offsetX", DEFAULT_WITHDRAW_BTN_OFFSET_X, -100000, 100000);
+        WITHDRAW_BTN_INVENTORY_OFFSET_X = b.comment("Withdraw button X offset relative to the inventory GUI left")
+                .defineInRange("inventoryOffsetX", DEFAULT_WITHDRAW_BTN_INVENTORY_OFFSET_X, -100000, 100000);
 
-        WITHDRAW_BTN_OFFSET_Y = b.comment("Withdraw button Y offset relative to the inventory GUI top")
-                .defineInRange("offsetY", DEFAULT_WITHDRAW_BTN_OFFSET_Y, -100000, 100000);
+        WITHDRAW_BTN_INVENTORY_OFFSET_Y = b.comment("Withdraw button Y offset relative to the inventory GUI top")
+                .defineInRange("inventoryOffsetY", DEFAULT_WITHDRAW_BTN_INVENTORY_OFFSET_Y, -100000, 100000);
+
+        WITHDRAW_BTN_MERCHANT_OFFSET_X = b.comment("Withdraw button X offset relative to the merchant GUI left")
+                .defineInRange("merchantOffsetX", DEFAULT_WITHDRAW_BTN_MERCHANT_OFFSET_X, -100000, 100000);
+
+        WITHDRAW_BTN_MERCHANT_OFFSET_Y = b.comment("Withdraw button Y offset relative to the merchant GUI top")
+                .defineInRange("merchantOffsetY", DEFAULT_WITHDRAW_BTN_MERCHANT_OFFSET_Y, -100000, 100000);
         b.pop();
 
         SPEC = b.build();

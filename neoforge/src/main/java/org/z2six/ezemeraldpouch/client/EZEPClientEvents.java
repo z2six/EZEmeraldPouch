@@ -59,7 +59,7 @@ public final class EZEPClientEvents {
 
                 // If user is typing in chat / sign / anvil / etc, don't steal the keybind.
                 // (This is optional but prevents annoying behavior.)
-                if (mc.screen != null && !(mc.screen instanceof InventoryScreen)) {
+                if (mc.screen != null && !(mc.screen instanceof InventoryScreen) && !(mc.screen instanceof MerchantScreen)) {
                     ModConstants.LOG.debug("[EZEP] Placement editor key pressed, but another screen is open ({}). Ignoring.",
                             mc.screen.getClass().getName());
                     continue;
@@ -123,8 +123,15 @@ public final class EZEPClientEvents {
         int left = cs.getGuiLeft();
         int top = cs.getGuiTop();
 
-        int offX = EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.get();
-        int offY = EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.get();
+        int offX;
+        int offY;
+        if (screen instanceof MerchantScreen) {
+            offX = EZEPClientConfig.WITHDRAW_BTN_MERCHANT_OFFSET_X.get();
+            offY = EZEPClientConfig.WITHDRAW_BTN_MERCHANT_OFFSET_Y.get();
+        } else {
+            offX = EZEPClientConfig.WITHDRAW_BTN_INVENTORY_OFFSET_X.get();
+            offY = EZEPClientConfig.WITHDRAW_BTN_INVENTORY_OFFSET_Y.get();
+        }
 
         int x = left + offX;
         int y = top + offY;

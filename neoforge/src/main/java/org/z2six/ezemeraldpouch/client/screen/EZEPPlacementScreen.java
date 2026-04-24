@@ -43,6 +43,8 @@ public final class EZEPPlacementScreen extends Screen {
 
     private static final int INV_W = 176;
     private static final int INV_H = 166;
+    private static final int MERCHANT_W = 276;
+    private static final int MERCHANT_H = 166;
 
     private static final int ICON_SIZE = 16;
     private static final int HUD_TEXT_PAD_X = 4;
@@ -52,7 +54,8 @@ public final class EZEPPlacementScreen extends Screen {
     private enum DragTarget {
         NONE,
         HUD,
-        WITHDRAW_BUTTON
+        INVENTORY_BUTTON,
+        MERCHANT_BUTTON
     }
 
     // Original values (for cancel)
@@ -62,8 +65,10 @@ public final class EZEPPlacementScreen extends Screen {
     private double origHudScale;
 
     private boolean origBtnEnabled;
-    private int origBtnOffX;
-    private int origBtnOffY;
+    private int origInvBtnOffX;
+    private int origInvBtnOffY;
+    private int origMerchantBtnOffX;
+    private int origMerchantBtnOffY;
 
     // Working preview state
     private boolean hudEnabled;
@@ -72,8 +77,10 @@ public final class EZEPPlacementScreen extends Screen {
     private double hudScale;
 
     private boolean btnEnabled;
-    private int btnOffX;
-    private int btnOffY;
+    private int invBtnOffX;
+    private int invBtnOffY;
+    private int merchantBtnOffX;
+    private int merchantBtnOffY;
 
     private DragTarget dragging = DragTarget.NONE;
     private int dragGrabDX = 0;
@@ -82,6 +89,8 @@ public final class EZEPPlacementScreen extends Screen {
     // Cached inventory outline position
     private int invLeft;
     private int invTop;
+    private int merchantLeft;
+    private int merchantTop;
 
     // Widgets we need to update labels on
     private Button hudToggleBtn;
@@ -102,8 +111,10 @@ public final class EZEPPlacementScreen extends Screen {
         origHudScale = EZEPClientConfig.HUD_SCALE.get();
 
         origBtnEnabled = EZEPClientConfig.WITHDRAW_BTN_ENABLED.get();
-        origBtnOffX = EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.get();
-        origBtnOffY = EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.get();
+        origInvBtnOffX = EZEPClientConfig.WITHDRAW_BTN_INVENTORY_OFFSET_X.get();
+        origInvBtnOffY = EZEPClientConfig.WITHDRAW_BTN_INVENTORY_OFFSET_Y.get();
+        origMerchantBtnOffX = EZEPClientConfig.WITHDRAW_BTN_MERCHANT_OFFSET_X.get();
+        origMerchantBtnOffY = EZEPClientConfig.WITHDRAW_BTN_MERCHANT_OFFSET_Y.get();
 
         // Working copies
         hudEnabled = origHudEnabled;
@@ -112,12 +123,25 @@ public final class EZEPPlacementScreen extends Screen {
         hudScale = origHudScale;
 
         btnEnabled = origBtnEnabled;
-        btnOffX = origBtnOffX;
-        btnOffY = origBtnOffY;
+        invBtnOffX = origInvBtnOffX;
+        invBtnOffY = origInvBtnOffY;
+        merchantBtnOffX = origMerchantBtnOffX;
+        merchantBtnOffY = origMerchantBtnOffY;
 
-        // Center the fake inventory outline
-        invLeft = Math.max(0, (this.width - INV_W) / 2);
-        invTop = Math.max(0, (this.height - INV_H) / 2);
+        // Layout the fake inventory + merchant outlines
+        int gapPreview = 24;
+        int totalWidth = INV_W + gapPreview + MERCHANT_W;
+        if (this.width >= totalWidth + 40) {
+            invLeft = Math.max(10, (this.width - totalWidth) / 2);
+            merchantLeft = invLeft + INV_W + gapPreview;
+            invTop = Math.max(64, (this.height - INV_H) / 2);
+            merchantTop = invTop;
+        } else {
+            merchantLeft = Math.max(10, (this.width - MERCHANT_W) / 2);
+            merchantTop = Math.max(64, (this.height - (INV_H + MERCHANT_H + gapPreview)) / 2);
+            invLeft = Math.max(10, (this.width - INV_W) / 2);
+            invTop = merchantTop + MERCHANT_H + gapPreview;
+        }
 
         // --- Button layout: 2 rows, centered, equal sizes ---
         // Row A (top): HUD Toggle, Withdraw Toggle, Reset
@@ -165,9 +189,10 @@ public final class EZEPPlacementScreen extends Screen {
                 .bounds(rowALeft + (btnW + gap) * 2, rowAY, btnW, btnH)
                 .build());
 
-        ModConstants.LOG.info("[EZEP] Placement editor opened. invLeft={},invTop={}, size={}x{}", invLeft, invTop, INV_W, INV_H);
-        ModConstants.LOG.info("[EZEP] Placement editor state: HUD(enabled={}, x={}, y={}, scale={}) BTN(enabled={}, offX={}, offY={})",
-                hudEnabled, hudX, hudY, hudScale, btnEnabled, btnOffX, btnOffY);
+        ModConstants.LOG.info("[EZEP] Placement editor opened. invLeft={},invTop={}, merchantLeft={},merchantTop={}",
+                invLeft, invTop, merchantLeft, merchantTop);
+        ModConstants.LOG.info("[EZEP] Placement editor state: HUD(enabled={}, x={}, y={}, scale={}) BTN(enabled={}, invOffX={}, invOffY={}, merchantOffX={}, merchantOffY={})",
+                hudEnabled, hudX, hudY, hudScale, btnEnabled, invBtnOffX, invBtnOffY, merchantBtnOffX, merchantBtnOffY);
     }
 
     @Override
@@ -183,13 +208,15 @@ public final class EZEPPlacementScreen extends Screen {
             EZEPClientConfig.HUD_SCALE.set(hudScale);
 
             EZEPClientConfig.WITHDRAW_BTN_ENABLED.set(btnEnabled);
-            EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.set(btnOffX);
-            EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.set(btnOffY);
+            EZEPClientConfig.WITHDRAW_BTN_INVENTORY_OFFSET_X.set(invBtnOffX);
+            EZEPClientConfig.WITHDRAW_BTN_INVENTORY_OFFSET_Y.set(invBtnOffY);
+            EZEPClientConfig.WITHDRAW_BTN_MERCHANT_OFFSET_X.set(merchantBtnOffX);
+            EZEPClientConfig.WITHDRAW_BTN_MERCHANT_OFFSET_Y.set(merchantBtnOffY);
 
             EZEPClientConfigSaver.saveClientConfigBestEffort();
 
-            ModConstants.LOG.info("[EZEP] Placement saved. HUD(enabled={}, x={}, y={}, scale={}) BTN(enabled={}, offX={}, offY={})",
-                    hudEnabled, hudX, hudY, hudScale, btnEnabled, btnOffX, btnOffY);
+            ModConstants.LOG.info("[EZEP] Placement saved. HUD(enabled={}, x={}, y={}, scale={}) BTN(enabled={}, invOffX={}, invOffY={}, merchantOffX={}, merchantOffY={})",
+                    hudEnabled, hudX, hudY, hudScale, btnEnabled, invBtnOffX, invBtnOffY, merchantBtnOffX, merchantBtnOffY);
 
         } catch (Throwable t) {
             ModConstants.LOG.warn("[EZEP] Placement save failed (non-fatal): {}", t.toString());
@@ -208,8 +235,10 @@ public final class EZEPPlacementScreen extends Screen {
             EZEPClientConfig.HUD_SCALE.set(origHudScale);
 
             EZEPClientConfig.WITHDRAW_BTN_ENABLED.set(origBtnEnabled);
-            EZEPClientConfig.WITHDRAW_BTN_OFFSET_X.set(origBtnOffX);
-            EZEPClientConfig.WITHDRAW_BTN_OFFSET_Y.set(origBtnOffY);
+            EZEPClientConfig.WITHDRAW_BTN_INVENTORY_OFFSET_X.set(origInvBtnOffX);
+            EZEPClientConfig.WITHDRAW_BTN_INVENTORY_OFFSET_Y.set(origInvBtnOffY);
+            EZEPClientConfig.WITHDRAW_BTN_MERCHANT_OFFSET_X.set(origMerchantBtnOffX);
+            EZEPClientConfig.WITHDRAW_BTN_MERCHANT_OFFSET_Y.set(origMerchantBtnOffY);
 
             EZEPClientConfigSaver.saveClientConfigBestEffort();
 
@@ -231,8 +260,10 @@ public final class EZEPPlacementScreen extends Screen {
             hudScale = EZEPClientConfig.DEFAULT_HUD_SCALE;
 
             btnEnabled = true;
-            btnOffX = EZEPClientConfig.DEFAULT_WITHDRAW_BTN_OFFSET_X;
-            btnOffY = EZEPClientConfig.DEFAULT_WITHDRAW_BTN_OFFSET_Y;
+            invBtnOffX = EZEPClientConfig.DEFAULT_WITHDRAW_BTN_INVENTORY_OFFSET_X;
+            invBtnOffY = EZEPClientConfig.DEFAULT_WITHDRAW_BTN_INVENTORY_OFFSET_Y;
+            merchantBtnOffX = EZEPClientConfig.DEFAULT_WITHDRAW_BTN_MERCHANT_OFFSET_X;
+            merchantBtnOffY = EZEPClientConfig.DEFAULT_WITHDRAW_BTN_MERCHANT_OFFSET_Y;
 
             updateToggleLabels();
             ModConstants.LOG.info("[EZEP] Placement editor reset to defaults (working state only).");
@@ -294,13 +325,21 @@ public final class EZEPPlacementScreen extends Screen {
                 return true;
             }
 
-            if (btnEnabled && isMouseOverWithdrawButton(mouseX, mouseY)) {
-                dragging = DragTarget.WITHDRAW_BUTTON;
-                int btnXAbs = invLeft + btnOffX;
-                int btnYAbs = invTop + btnOffY;
+            if (btnEnabled && isMouseOverInventoryWithdrawButton(mouseX, mouseY)) {
+                dragging = DragTarget.INVENTORY_BUTTON;
+                int btnXAbs = invLeft + invBtnOffX;
                 dragGrabDX = (int) mouseX - btnXAbs;
-                dragGrabDY = (int) mouseY - btnYAbs;
-                ModConstants.LOG.debug("[EZEP] Drag start WITHDRAW_BUTTON (grab {},{})", dragGrabDX, dragGrabDY);
+                dragGrabDY = (int) mouseY - (invTop + invBtnOffY);
+                ModConstants.LOG.debug("[EZEP] Drag start INVENTORY_BUTTON (grab {},{})", dragGrabDX, dragGrabDY);
+                return true;
+            }
+
+            if (btnEnabled && isMouseOverMerchantWithdrawButton(mouseX, mouseY)) {
+                dragging = DragTarget.MERCHANT_BUTTON;
+                int btnXAbs = merchantLeft + merchantBtnOffX;
+                dragGrabDX = (int) mouseX - btnXAbs;
+                dragGrabDY = (int) mouseY - (merchantTop + merchantBtnOffY);
+                ModConstants.LOG.debug("[EZEP] Drag start MERCHANT_BUTTON (grab {},{})", dragGrabDX, dragGrabDY);
                 return true;
             }
 
@@ -342,7 +381,7 @@ public final class EZEPPlacementScreen extends Screen {
                 return true;
             }
 
-            if (dragging == DragTarget.WITHDRAW_BUTTON) {
+            if (dragging == DragTarget.INVENTORY_BUTTON) {
                 int nxAbs = (int) mouseX - dragGrabDX;
                 int nyAbs = (int) mouseY - dragGrabDY;
 
@@ -352,8 +391,23 @@ public final class EZEPPlacementScreen extends Screen {
                 nxOff = clamp(nxOff, -64, INV_W + 64);
                 nyOff = clamp(nyOff, -64, INV_H + 64);
 
-                btnOffX = nxOff;
-                btnOffY = nyOff;
+                invBtnOffX = nxOff;
+                invBtnOffY = nyOff;
+                return true;
+            }
+
+            if (dragging == DragTarget.MERCHANT_BUTTON) {
+                int nxAbs = (int) mouseX - dragGrabDX;
+                int nyAbs = (int) mouseY - dragGrabDY;
+
+                int nxOff = nxAbs - merchantLeft;
+                int nyOff = nyAbs - merchantTop;
+
+                nxOff = clamp(nxOff, -64, MERCHANT_W + 64);
+                nyOff = clamp(nyOff, -64, MERCHANT_H + 64);
+
+                merchantBtnOffX = nxOff;
+                merchantBtnOffY = nyOff;
                 return true;
             }
 
@@ -384,9 +438,15 @@ public final class EZEPPlacementScreen extends Screen {
         }
     }
 
-    private boolean isMouseOverWithdrawButton(double mx, double my) {
-        int x = invLeft + btnOffX;
-        int y = invTop + btnOffY;
+    private boolean isMouseOverInventoryWithdrawButton(double mx, double my) {
+        int x = invLeft + invBtnOffX;
+        int y = invTop + invBtnOffY;
+        return mx >= x && mx <= (x + ICON_SIZE) && my >= y && my <= (y + ICON_SIZE);
+    }
+
+    private boolean isMouseOverMerchantWithdrawButton(double mx, double my) {
+        int x = merchantLeft + merchantBtnOffX;
+        int y = merchantTop + merchantBtnOffY;
         return mx >= x && mx <= (x + ICON_SIZE) && my >= y && my <= (y + ICON_SIZE);
     }
 
@@ -423,22 +483,23 @@ public final class EZEPPlacementScreen extends Screen {
             gg.drawString(font, "Inventory (example outline)", invLeft + 6, invTop + 6, 0xFFFFFFFF, true);
         }
 
-        // Withdraw button preview
-        int btnX = invLeft + btnOffX;
-        int btnY = invTop + btnOffY;
+        // Fake merchant outline
+        drawOutlineRect(gg, merchantLeft, merchantTop, MERCHANT_W, MERCHANT_H, 0xFFFFFFFF);
+        drawOutlineRect(gg, merchantLeft - 1, merchantTop - 1, MERCHANT_W + 2, MERCHANT_H + 2, 0xFF00C8FF);
+        drawCheckerInteriorHint(gg, merchantLeft + 1, merchantTop + 1, MERCHANT_W - 2, MERCHANT_H - 2);
+
+        if (font != null) {
+            gg.drawString(font, "Merchant (example outline)", merchantLeft + 6, merchantTop + 6, 0xFFFFFFFF, true);
+        }
 
         if (btnEnabled) {
-            gg.renderItem(EMERALD_ICON, btnX, btnY);
-
-            if (isMouseOverWithdrawButton(mouseX, mouseY) || dragging == DragTarget.WITHDRAW_BUTTON) {
-                gg.fill(btnX, btnY, btnX + ICON_SIZE, btnY + ICON_SIZE, 0x60FFFFFF);
-                drawOutlineRect(gg, btnX, btnY, ICON_SIZE, ICON_SIZE, 0xFFFFFFFF);
-            }
+            renderWithdrawButtonPreview(gg, mouseX, mouseY, invLeft + invBtnOffX, invTop + invBtnOffY,
+                    isMouseOverInventoryWithdrawButton(mouseX, mouseY) || dragging == DragTarget.INVENTORY_BUTTON);
+            renderWithdrawButtonPreview(gg, mouseX, mouseY, merchantLeft + merchantBtnOffX, merchantTop + merchantBtnOffY,
+                    isMouseOverMerchantWithdrawButton(mouseX, mouseY) || dragging == DragTarget.MERCHANT_BUTTON);
         } else {
-            drawOutlineRect(gg, btnX, btnY, ICON_SIZE, ICON_SIZE, 0xFF888888);
-            if (font != null) {
-                gg.drawString(font, "Hidden", btnX + 2, btnY + 4, 0xFFAAAAAA, false);
-            }
+            renderHiddenWithdrawButtonPreview(gg, font, invLeft + invBtnOffX, invTop + invBtnOffY);
+            renderHiddenWithdrawButtonPreview(gg, font, merchantLeft + merchantBtnOffX, merchantTop + merchantBtnOffY);
         }
 
         // HUD preview
@@ -494,6 +555,21 @@ public final class EZEPPlacementScreen extends Screen {
             gg.pose().popPose();
         } catch (Throwable t) {
             ModConstants.LOG.debug("[EZEP] renderHudPreview failed (non-fatal).", t);
+        }
+    }
+
+    private void renderWithdrawButtonPreview(GuiGraphics gg, int mouseX, int mouseY, int x, int y, boolean hovered) {
+        gg.renderItem(EMERALD_ICON, x, y);
+        if (hovered) {
+            gg.fill(x, y, x + ICON_SIZE, y + ICON_SIZE, 0x60FFFFFF);
+            drawOutlineRect(gg, x, y, ICON_SIZE, ICON_SIZE, 0xFFFFFFFF);
+        }
+    }
+
+    private void renderHiddenWithdrawButtonPreview(GuiGraphics gg, Font font, int x, int y) {
+        drawOutlineRect(gg, x, y, ICON_SIZE, ICON_SIZE, 0xFF888888);
+        if (font != null) {
+            gg.drawString(font, "Hidden", x + 2, y + 4, 0xFFAAAAAA, false);
         }
     }
 

@@ -66,11 +66,15 @@ public final class MerchantPouchTradeUtil {
             if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, costStack)) return false;
 
             int have = current.isEmpty() ? 0 : current.getCount();
-            int need = Math.max(0, costStack.getCount() - have);
+            int target = current.isEmpty() ? costStack.getMaxStackSize() : current.getMaxStackSize();
+            target = Math.max(target, costStack.getCount());
+            int need = Math.max(0, target - have);
             if (need <= 0) return false;
-            if (!EmeraldPouchUtil.tryWithdrawExact(player, need)) return false;
+            long taken = EmeraldPouchUtil.withdrawEmeralds(player, need);
+            if (taken <= 0L) return false;
 
-            ItemStack next = costStack.copyWithCount(have + need);
+            int nextCount = have + (int)Math.min((long) need, taken);
+            ItemStack next = costStack.copyWithCount(nextCount);
             tradeContainer.setItem(slotIndex, next);
             return true;
         } catch (Throwable ignored) {
